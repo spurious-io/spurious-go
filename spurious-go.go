@@ -17,7 +17,7 @@ func main() {
       Usage:     "Pulls down the images for and creates the containers.",
       Action: func(c *cli.Context) {
 
-        var channel = make(chan []byte)
+        var channel = make(chan ImageStatus)
 
         images := [...]string{"spurious/sqs", "spurious/s3", "spurious/dynamodb", "spurious/browser"}
         for _, image := range images {
@@ -26,7 +26,7 @@ func main() {
 
         for {
           entry := <- channel
-          print(string(entry[:]))
+          print(entry.image + " - " + string(entry.output[:]))
         }
 
       },
@@ -62,19 +62,25 @@ func main() {
 }
 
 type Output struct {
-    ch chan []byte
+  image string
+  ch chan ImageStatus
+}
+
+type ImageStatus struct {
+  image string
+  output []byte
 }
 
 func (o *Output) Write(p []byte) (n int, err error) {
-  o.ch <- p
+  o.ch <- ImageStatus{image: o.image, output: p}
   return
 }
 
-func getImage(image string, channel chan []byte) {
+func getImage(image string, channel chan ImageStatus) {
   endpoint := os.Getenv("DOCKER_HOST")
-  client, _ := docker.NewTLSClient(endpoint, os.Getenv("DOCKER_CERT_PATH") + "cert.pem", "/Users/stevenjack/.boot2docker/certs/boot2docker-vm/key.pem", "/Users/stevenjack/.boot2docker/certs/boot2docker-vm/ca.pem")
+  client, _ := docker.NewTLSClient(endpoint, "/Users/stevenjack/.boot2docker/certs/boot2docker-vm/cert.pem", "/Users/stevenjack/.boot2docker/certs/boot2docker-vm/key.pem", "/Users/stevenjack/.boot2docker/certs/boot2docker-vm/ca.pem")
 
-  output := Output{ch: channel}
+  output := Output{image: image, ch: channel}
 
   err := client.PullImage(docker.PullImageOptions{Repository: image, OutputStream: &output}, docker.AuthConfiguration{})
 
